@@ -133,7 +133,7 @@
   /* ── CANVAS AREA ── */
   .canvas-area {
     flex: 1;
-    background: repeating-conic-gradient(#1a1a24 0% 25%, #141420 0% 50%) 0 0 / 20px 20px;
+    background: #111118;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden; position: relative;
     cursor: crosshair;
@@ -141,6 +141,11 @@
   #canvas-wrap {
     position: relative;
     image-rendering: pixelated;
+    outline: 1px solid rgba(255,255,255,0.25);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.8),
+      0 8px 40px rgba(0,0,0,0.6),
+      inset 0 0 0 1px rgba(255,255,255,0.04);
   }
   #ref-img {
     position: absolute; top: 0; left: 0;
@@ -153,6 +158,9 @@
     cursor: crosshair;
     position: relative;
     z-index: 2;
+    background:
+      repeating-conic-gradient(#2a2a38 0% 25%, #1e1e2c 0% 50%)
+      0 0 / 16px 16px;
   }
   #overlay-canvas {
     position: absolute; top: 0; left: 0;
