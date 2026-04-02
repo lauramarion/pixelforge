@@ -18,7 +18,7 @@
     --text: #d4d4e8;
     --text-dim: #6c6c8a;
     --tool-size: 44px;
-    --panel-w: 220px;
+    --panel-w: 280px;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -147,10 +147,12 @@
       0 8px 40px rgba(0,0,0,0.6),
       inset 0 0 0 1px rgba(255,255,255,0.04);
   }
-  #ref-img {
+  #checker-bg {
     position: absolute; top: 0; left: 0;
-    image-rendering: pixelated;
-    pointer-events: none;
+    z-index: 0;
+    background-color: #1a1a28;
+    /* backgroundSize set dynamically by JS */
+    background-image: repeating-conic-gradient(#2a2a38 0% 25%, #1a1a28 0% 50%);
   }
   #main-canvas {
     display: block;
@@ -158,14 +160,24 @@
     cursor: crosshair;
     position: relative;
     z-index: 2;
-    background:
-      repeating-conic-gradient(#2a2a38 0% 25%, #1e1e2c 0% 50%)
-      0 0 / 16px 16px;
+    background: transparent;
   }
   #overlay-canvas {
     position: absolute; top: 0; left: 0;
     pointer-events: none; z-index: 3;
     image-rendering: pixelated;
+  }
+
+  /* brush cursor preview */
+  #brush-cursor {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+    border: 1px solid rgba(255,255,255,0.85);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+    image-rendering: pixelated;
+    display: none;
+    mix-blend-mode: difference;
   }
 
   /* ── RIGHT PANEL ── */
@@ -483,9 +495,23 @@
   <!-- CANVAS AREA -->
   <div class="canvas-area" id="canvas-area">
     <div id="canvas-wrap">
-      <img id="ref-img" src="" style="display:none; opacity:0.4;">
+      <div id="checker-bg"></div>
       <canvas id="main-canvas"></canvas>
       <canvas id="overlay-canvas"></canvas>
+      <div id="brush-cursor"></div>
+    </div>
+    <!-- Reference image: floating, draggable, resizable -->
+    <div id="ref-float" style="display:none; position:absolute; top:0; left:0; z-index:50; user-select:none; border-radius:6px; box-shadow:0 4px 24px rgba(0,0,0,0.6); min-width:80px; min-height:60px; pointer-events:none;">
+      <div id="ref-float-bar" style="background:rgba(14,14,18,0.9); border:1px solid #2e2e3e; border-bottom:none; border-radius:6px 6px 0 0; padding:4px 8px; display:flex; align-items:center; gap:6px; font-size:10px; color:#6c6c8a; font-family:'Share Tech Mono',monospace; cursor:move; pointer-events:all;">
+        <span style="color:#e8ff47; font-size:9px; letter-spacing:1px;">📌 REF</span>
+        <span id="ref-float-name" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;"></span>
+        <button onclick="clearRef()" style="background:none;border:none;color:#6c6c8a;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;" title="Remove">✕</button>
+      </div>
+      <div style="position:relative; border:1px solid #2e2e3e; border-radius:0 0 6px 6px; overflow:hidden;" id="ref-img-wrap">
+        <img id="ref-img-float" style="display:block; width:100%; height:100%; object-fit:contain; pointer-events:none;">
+        <!-- resize handle -->
+        <div id="ref-resize" style="position:absolute; bottom:0; right:0; width:14px; height:14px; cursor:se-resize; background:linear-gradient(135deg, transparent 50%, #e8ff47 50%); opacity:0.6; border-radius:0 0 6px 0; pointer-events:all;"></div>
+      </div>
     </div>
   </div>
 
@@ -543,7 +569,8 @@
       <div class="palette-presets" style="margin-top:8px;">
         <select class="preset-select" onchange="loadPreset(this.value); this.value=''">
           <option value="">Load preset palette…</option>
-          <option value="garden_project">garden_project (10)</option>
+          <option value="garden_project">🌿 Garden Project (10)</option>
+          <option value="gameboy">Game Boy (4)</option>
           <option value="nes">NES (16)</option>
           <option value="pico8">PICO-8 (16)</option>
           <option value="endesga32">ENDESGA 32</option>
@@ -571,31 +598,18 @@
     <div class="panel-section">
       <div class="panel-title">Reference Image</div>
       <div class="ref-controls">
-        <button class="io-btn" onclick="triggerImportRef()">📂 Load Reference</button>
-        <div class="ref-opacity-row">
-          <label>Opacity</label>
+        <button class="io-btn" onclick="triggerImportRef()">📂 Load as layer</button>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+          <label style="font-size:10px;color:var(--text-dim)">Opacity</label>
           <input type="range" id="ref-opacity" min="0" max="100" value="40"
             style="flex:1;-webkit-appearance:none;height:3px;background:var(--border);border-radius:2px;outline:none"
             oninput="setRefOpacity(+this.value/100)">
           <span style="font-size:11px;min-width:28px;text-align:right" id="ref-opacity-val">40%</span>
         </div>
-        <button class="io-btn" onclick="clearRef()">✕ Clear</button>
+        <button class="io-btn" onclick="clearRef()" style="margin-top:6px">✕ Remove reference</button>
       </div>
     </div>
 
-    <!-- Import / Export -->
-    <div class="panel-section">
-      <div class="panel-title">Import / Export</div>
-      <div class="io-grid">
-        <button class="io-btn" onclick="triggerImportPNG()">📥 PNG</button>
-        <button class="io-btn" onclick="triggerImportSVG()">📥 SVG</button>
-        <button class="io-btn export" onclick="exportPNG()">📤 PNG</button>
-        <button class="io-btn export" onclick="exportSVG()">📤 SVG</button>
-        <button class="io-btn export" onclick="exportPNGScaled()" style="grid-column:1/-1">📤 PNG (custom scale)</button>
-        <button class="io-btn" onclick="saveProject()" style="grid-column:1/-1">💾 Save .pxforge</button>
-        <button class="io-btn" onclick="triggerLoadProject()" style="grid-column:1/-1">📂 Load .pxforge</button>
-      </div>
-    </div>
 
   </div>
 </div>
@@ -733,7 +747,7 @@ const canvasWrap = document.getElementById('canvas-wrap');
 // ═══════════════════════════════════════════════════
 function init() {
   createNewCanvasData(32, 32, 'transparent');
-  loadPreset('pico8');
+  loadPreset('garden_project');
   updateZoom();
   renderAll();
 }
@@ -752,6 +766,7 @@ function createNewCanvasData(w, h, bg) {
   sel = null; selCanvas = null;
   mainCanvas.width = W; mainCanvas.height = H;
   overlayCanvas.width = W; overlayCanvas.height = H;
+  clearRef();
   document.getElementById('size-display').textContent = `${W} × ${H}`;
   renderLayersList();
   renderAll();
@@ -801,10 +816,11 @@ function deleteLayer() {
 }
 
 function mergeDown() {
-  if (activeLayerIdx >= layers.length - 1) return;
+  // "down" = lower index = lower in visual stack
+  if (activeLayerIdx <= 0) return;
   saveUndo();
   const above = layers[activeLayerIdx];
-  const below = layers[activeLayerIdx+1];
+  const below = layers[activeLayerIdx - 1];
   below.ctx.drawImage(above.canvas, 0, 0);
   layers.splice(activeLayerIdx, 1);
   activeLayerIdx = Math.max(0, activeLayerIdx - 1);
@@ -858,12 +874,15 @@ function renderLayersList() {
 // ═══════════════════════════════════════════════════
 function renderAll() {
   mainCtx.clearRect(0, 0, W, H);
-  // Draw layers bottom to top
-  for (let i = layers.length - 1; i >= 0; i--) {
-    if (layers[i].visible) {
-      mainCtx.drawImage(layers[i].canvas, 0, 0);
-    }
+  // layers[0] = BOTTOM, layers[length-1] = TOP
+  // Draw bottom to top: index 0 first, index length-1 last (appears on top)
+  for (let i = 0; i < layers.length; i++) {
+    const l = layers[i];
+    if (!l.visible) continue;
+    mainCtx.globalAlpha = (l.opacity !== undefined) ? l.opacity : 1;
+    mainCtx.drawImage(l.canvas, 0, 0);
   }
+  mainCtx.globalAlpha = 1;
   drawOverlay();
 }
 
@@ -903,14 +922,20 @@ function drawOverlay() {
 //  ZOOM & PAN
 // ═══════════════════════════════════════════════════
 function updateZoom() {
-  mainCanvas.style.width = (W * ZOOM) + 'px';
-  mainCanvas.style.height = (H * ZOOM) + 'px';
-  overlayCanvas.style.width = (W * ZOOM) + 'px';
-  overlayCanvas.style.height = (H * ZOOM) + 'px';
-  const ref = document.getElementById('ref-img');
-  ref.style.width = (W * ZOOM) + 'px';
-  ref.style.height = (H * ZOOM) + 'px';
+  const pw = W * ZOOM, ph = H * ZOOM;
+  mainCanvas.style.width = pw + 'px';
+  mainCanvas.style.height = ph + 'px';
+  overlayCanvas.style.width = pw + 'px';
+  overlayCanvas.style.height = ph + 'px';
+  // Checkerboard: each square = 1 pixel = ZOOM screen px (min 2px for visibility)
+  const sq = Math.max(ZOOM, 2);
+  const checker = document.getElementById('checker-bg');
+  checker.style.width = pw + 'px';
+  checker.style.height = ph + 'px';
+  checker.style.backgroundSize = `${sq * 2}px ${sq * 2}px`;
   document.getElementById('zoom-label').textContent = ZOOM + '×';
+  updateBrushCursor(-999, -999);
+  repositionRef();
 }
 function zoomIn() { ZOOM = Math.min(ZOOM >= 1 ? ZOOM + (ZOOM >= 8 ? 4 : 1) : ZOOM * 2, 64); updateZoom(); drawOverlay(); }
 function zoomOut() { ZOOM = Math.max(ZOOM > 8 ? ZOOM - 4 : ZOOM > 1 ? ZOOM - 1 : ZOOM, 1); updateZoom(); drawOverlay(); }
@@ -949,6 +974,8 @@ mainCanvas.addEventListener('mousemove', e => {
   updateStatus(pos.x, pos.y);
   if (isDrawing) handleToolMove(pos.x, pos.y, e);
   else handleToolHover(pos.x, pos.y);
+  // always update brush cursor position while over canvas
+  if (['pencil','eraser'].includes(currentTool)) updateBrushCursor(pos.x, pos.y);
 });
 mainCanvas.addEventListener('mouseup', e => {
   if (!isDrawing) return;
@@ -958,6 +985,7 @@ mainCanvas.addEventListener('mouseup', e => {
   lastPx = -1; lastPy = -1;
 });
 mainCanvas.addEventListener('mouseleave', e => {
+  hideBrushCursor();
   if (isDrawing) {
     const pos = getPixelPos(e);
     handleToolEnd(pos.x, pos.y, e);
@@ -1058,7 +1086,31 @@ function handleToolEnd(x, y, e) {
   }
 }
 
-function handleToolHover(x, y) {}
+function handleToolHover(x, y) {
+  if (['pencil','eraser'].includes(currentTool)) {
+    updateBrushCursor(x, y);
+  } else {
+    hideBrushCursor();
+  }
+}
+
+function updateBrushCursor(x, y) {
+  const cur = document.getElementById('brush-cursor');
+  if (!inBounds(x, y)) { cur.style.display = 'none'; return; }
+  const half = Math.floor(brushSize / 2);
+  const px = (x - half) * ZOOM;
+  const py = (y - half) * ZOOM;
+  const size = brushSize * ZOOM;
+  cur.style.display = 'block';
+  cur.style.left = px + 'px';
+  cur.style.top = py + 'px';
+  cur.style.width = size + 'px';
+  cur.style.height = size + 'px';
+}
+
+function hideBrushCursor() {
+  document.getElementById('brush-cursor').style.display = 'none';
+}
 
 function inBounds(x, y) { return x >= 0 && x < W && y >= 0 && y < H; }
 
@@ -1255,6 +1307,7 @@ function clearPalette() { palette = []; selectedPaletteIdx = -1; renderPalette()
 
 const PRESETS = {
   garden_project: ['#eaf8f6','#d0f0ec','#30c8b0','#1a9e8a','#e8e0f8','#58e890','#e840a0','#f0d030','#3828a8','#080818'],
+  gameboy: ['#0f380f','#306230','#8bac0f','#9bbc0f'],
   nes: ['#000000','#fcfcfc','#f8f8f8','#bcbcbc','#7c7c7c','#a4e4fc','#3cbcfc','#0078f8',
         '#0000fc','#b8b8f8','#6888fc','#0058f8','#0044fc','#f8b8f8','#c848c8',
         '#8800a8'],
@@ -1460,29 +1513,126 @@ function openCtxMenu(e) {
 document.addEventListener('click', () => document.getElementById('ctx-menu').classList.remove('open'));
 
 // ═══════════════════════════════════════════════════
-//  REFERENCE IMAGE
+//  REFERENCE IMAGE — floating, draggable, resizable
 // ═══════════════════════════════════════════════════
+(function() {
+  let dragMode = null; // 'move' | 'resize'
+  let ox = 0, oy = 0, startW = 0, startH = 0, startX = 0, startY = 0;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const panel  = document.getElementById('ref-float');
+    const bar    = document.getElementById('ref-float-bar');
+    const resizeHandle = document.getElementById('ref-resize');
+    const wrap   = document.getElementById('ref-img-wrap');
+    if (!panel) return;
+
+    // ── drag to move ──
+    bar.addEventListener('mousedown', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      dragMode = 'move';
+      const r = panel.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      e.preventDefault();
+    });
+
+    // ── drag to resize ──
+    resizeHandle.addEventListener('mousedown', e => {
+      dragMode = 'resize';
+      const r = wrap.getBoundingClientRect();
+      startW = r.width;
+      startH = r.height;
+      startX = e.clientX;
+      startY = e.clientY;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragMode) return;
+      const area       = document.getElementById('canvas-area').getBoundingClientRect();
+      const canvasRect = document.getElementById('canvas-wrap').getBoundingClientRect();
+      if (dragMode === 'move') {
+        const newLeft = e.clientX - area.left - ox;
+        const newTop  = e.clientY - area.top  - oy;
+        panel.style.left = newLeft + 'px';
+        panel.style.top  = newTop  + 'px';
+        // Store as offset from canvas-wrap so repositionRef can restore it
+        refOffsetX = newLeft - (canvasRect.left - area.left);
+        refOffsetY = newTop  - (canvasRect.top  - area.top);
+      } else if (dragMode === 'resize') {
+        const newW = Math.max(80,  startW + (e.clientX - startX));
+        const newH = Math.max(60, startH + (e.clientY - startY));
+        wrap.style.width  = newW + 'px';
+        wrap.style.height = newH + 'px';
+      }
+    });
+
+    document.addEventListener('mouseup', () => { dragMode = null; });
+  });
+})();
+
 function triggerImportRef() { document.getElementById('import-ref-input').click(); }
-function importRef(e) {
-  const file = e.target.files[0]; if (!file) return;
-  const img = document.getElementById('ref-img');
-  img.src = URL.createObjectURL(file);
-  img.style.display = 'block';
-  e.target.value = '';
-}
-function setRefOpacity(v) {
-  document.getElementById('ref-img').style.opacity = v;
-  document.getElementById('ref-opacity-val').textContent = Math.round(v*100) + '%';
-}
-function clearRef() {
-  const img = document.getElementById('ref-img');
-  img.src = ''; img.style.display = 'none';
+
+// Store ref position as offset from canvas-wrap top-left (in px, at current zoom)
+// so we can recompute when zoom changes
+let refOffsetX = 0, refOffsetY = 0;
+
+function repositionRef() {
+  const floatEl = document.getElementById('ref-float');
+  if (!floatEl || floatEl.style.display === 'none') return;
+  const area      = document.getElementById('canvas-area').getBoundingClientRect();
+  const canvasRect = document.getElementById('canvas-wrap').getBoundingClientRect();
+  floatEl.style.left = (canvasRect.left - area.left + refOffsetX) + 'px';
+  floatEl.style.top  = (canvasRect.top  - area.top  + refOffsetY) + 'px';
 }
 
-document.getElementById('ref-opacity').addEventListener('input', function() {
-  setRefOpacity(+this.value / 100);
-  document.getElementById('ref-opacity-val').textContent = this.value + '%';
-});
+function importRef(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const floatEl  = document.getElementById('ref-float');
+    const imgEl    = document.getElementById('ref-img-float');
+    const nameEl   = document.getElementById('ref-float-name');
+    const wrap     = document.getElementById('ref-img-wrap');
+    const area     = document.getElementById('canvas-area');
+
+    imgEl.src = ev.target.result;
+    nameEl.textContent = file.name;
+
+    imgEl.onload = () => {
+      const canvasH = H * ZOOM;
+      const aspect  = imgEl.naturalWidth / imgEl.naturalHeight;
+      const dispH   = Math.min(canvasH, area.clientHeight - 32);
+      const dispW   = Math.round(dispH * aspect);
+      wrap.style.width  = dispW + 'px';
+      wrap.style.height = dispH + 'px';
+
+      // Default position: top-left of the canvas
+      refOffsetX = 0;
+      refOffsetY = 0;
+      floatEl.style.display = 'block';
+      repositionRef();
+    };
+
+    const opVal = document.getElementById('ref-opacity').value;
+    imgEl.style.opacity = opVal / 100;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function setRefOpacity(v) {
+  document.getElementById('ref-opacity-val').textContent = Math.round(v * 100) + '%';
+  const imgEl = document.getElementById('ref-img-float');
+  if (imgEl) imgEl.style.opacity = v;
+}
+
+function clearRef() {
+  const floatEl = document.getElementById('ref-float');
+  floatEl.style.display = 'none';
+  document.getElementById('ref-img-float').src = '';
+}
 
 // ═══════════════════════════════════════════════════
 //  IMPORT
