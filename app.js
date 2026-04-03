@@ -947,8 +947,8 @@ function importRef(e) {
     const wrap    = document.getElementById('ref-img-wrap');
     const area    = document.getElementById('canvas-area');
 
-    imgEl.src = ev.target.result;
     nameEl.textContent = file.name;
+    imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
 
     imgEl.onload = () => {
       const aspect = imgEl.naturalWidth / imgEl.naturalHeight;
@@ -962,7 +962,7 @@ function importRef(e) {
       repositionRef();
     };
 
-    imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
+    imgEl.src = ev.target.result;
   };
   reader.readAsDataURL(file);
   e.target.value = '';
