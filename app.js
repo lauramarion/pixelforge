@@ -942,34 +942,32 @@ function importRef(e) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     const dataURL = ev.target.result;
-    // Use a temporary Image to measure natural dimensions before touching the DOM.
-    const probe = new Image();
-    probe.onload = () => {
-      const floatEl = document.getElementById('ref-float');
-      const imgEl   = document.getElementById('ref-img-float');
-      const nameEl  = document.getElementById('ref-float-name');
-      const wrap    = document.getElementById('ref-img-wrap');
-      const area    = document.getElementById('canvas-area');
+    const floatEl = document.getElementById('ref-float');
+    const imgEl   = document.getElementById('ref-img-float');
+    const nameEl  = document.getElementById('ref-float-name');
+    const wrap    = document.getElementById('ref-img-wrap');
+    const area    = document.getElementById('canvas-area');
 
-      const aspect = probe.naturalWidth / probe.naturalHeight;
+    nameEl.textContent = file.name;
+    imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
+
+    // onload must be assigned before src so it is guaranteed to catch the event.
+    imgEl.onload = () => {
+      const aspect = imgEl.naturalWidth / imgEl.naturalHeight;
       const dispH  = Math.min(H * ZOOM, area.clientHeight - 32);
       const dispW  = Math.round(dispH * aspect);
-
-      // Set explicit pixel dimensions so no CSS percentage resolution is needed.
-      wrap.style.width  = dispW + 'px';
-      wrap.style.height = dispH + 'px';
+      // Explicit pixel sizes — avoids CSS percentage-height resolution issues.
+      wrap.style.width   = dispW + 'px';
+      wrap.style.height  = dispH + 'px';
       imgEl.style.width  = dispW + 'px';
       imgEl.style.height = dispH + 'px';
-      imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
-      imgEl.src = dataURL;
-
-      nameEl.textContent = file.name;
       refOffsetX = 0;
       refOffsetY = 0;
       floatEl.style.display = 'block';
       repositionRef();
     };
-    probe.src = dataURL;
+
+    imgEl.src = dataURL;
   };
   reader.readAsDataURL(file);
 }
