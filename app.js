@@ -877,53 +877,51 @@ document.addEventListener('click', () => document.getElementById('ctx-menu').cla
   let dragMode = null; // 'move' | 'resize'
   let ox = 0, oy = 0, startW = 0, startH = 0, startX = 0, startY = 0;
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const panel        = document.getElementById('ref-float');
-    const bar          = document.getElementById('ref-float-bar');
-    const resizeHandle = document.getElementById('ref-resize');
-    const wrap         = document.getElementById('ref-img-wrap');
-    if (!panel) return;
+  // app.js runs at end of <body>, so the DOM is already ready — no DOMContentLoaded needed.
+  const panel        = document.getElementById('ref-float');
+  const bar          = document.getElementById('ref-float-bar');
+  const resizeHandle = document.getElementById('ref-resize');
+  const wrap         = document.getElementById('ref-img-wrap');
 
-    bar.addEventListener('mousedown', e => {
-      if (e.target.tagName === 'BUTTON') return;
-      dragMode = 'move';
-      const r = panel.getBoundingClientRect();
-      ox = e.clientX - r.left;
-      oy = e.clientY - r.top;
-      e.preventDefault();
-    });
-
-    resizeHandle.addEventListener('mousedown', e => {
-      dragMode = 'resize';
-      const r = wrap.getBoundingClientRect();
-      startW = r.width;
-      startH = r.height;
-      startX = e.clientX;
-      startY = e.clientY;
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    document.addEventListener('mousemove', e => {
-      if (!dragMode) return;
-      const area       = document.getElementById('canvas-area').getBoundingClientRect();
-      const canvasRect = document.getElementById('canvas-wrap').getBoundingClientRect();
-      if (dragMode === 'move') {
-        const newLeft = e.clientX - area.left - ox;
-        const newTop  = e.clientY - area.top  - oy;
-        panel.style.left = newLeft + 'px';
-        panel.style.top  = newTop  + 'px';
-        // Store offset from canvas-wrap so repositionRef can restore it on zoom change
-        refOffsetX = newLeft - (canvasRect.left - area.left);
-        refOffsetY = newTop  - (canvasRect.top  - area.top);
-      } else if (dragMode === 'resize') {
-        wrap.style.width  = Math.max(80, startW + (e.clientX - startX)) + 'px';
-        wrap.style.height = Math.max(60, startH + (e.clientY - startY)) + 'px';
-      }
-    });
-
-    document.addEventListener('mouseup', () => { dragMode = null; });
+  bar.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    dragMode = 'move';
+    const r = panel.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    e.preventDefault();
   });
+
+  resizeHandle.addEventListener('mousedown', e => {
+    dragMode = 'resize';
+    const r = wrap.getBoundingClientRect();
+    startW = r.width;
+    startH = r.height;
+    startX = e.clientX;
+    startY = e.clientY;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragMode) return;
+    const area       = document.getElementById('canvas-area').getBoundingClientRect();
+    const canvasRect = document.getElementById('canvas-wrap').getBoundingClientRect();
+    if (dragMode === 'move') {
+      const newLeft = e.clientX - area.left - ox;
+      const newTop  = e.clientY - area.top  - oy;
+      panel.style.left = newLeft + 'px';
+      panel.style.top  = newTop  + 'px';
+      // Store offset from canvas-wrap so repositionRef can restore it on zoom change
+      refOffsetX = newLeft - (canvasRect.left - area.left);
+      refOffsetY = newTop  - (canvasRect.top  - area.top);
+    } else if (dragMode === 'resize') {
+      wrap.style.width  = Math.max(80, startW + (e.clientX - startX)) + 'px';
+      wrap.style.height = Math.max(60, startH + (e.clientY - startY)) + 'px';
+    }
+  });
+
+  document.addEventListener('mouseup', () => { dragMode = null; });
 })();
 
 function triggerImportRef() { document.getElementById('import-ref-input').click(); }
@@ -939,33 +937,41 @@ function repositionRef() {
 
 function importRef(e) {
   const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+
   const reader = new FileReader();
   reader.onload = (ev) => {
-    const floatEl = document.getElementById('ref-float');
-    const imgEl   = document.getElementById('ref-img-float');
-    const nameEl  = document.getElementById('ref-float-name');
-    const wrap    = document.getElementById('ref-img-wrap');
-    const area    = document.getElementById('canvas-area');
+    const dataURL = ev.target.result;
+    // Use a temporary Image to measure natural dimensions before touching the DOM.
+    const probe = new Image();
+    probe.onload = () => {
+      const floatEl = document.getElementById('ref-float');
+      const imgEl   = document.getElementById('ref-img-float');
+      const nameEl  = document.getElementById('ref-float-name');
+      const wrap    = document.getElementById('ref-img-wrap');
+      const area    = document.getElementById('canvas-area');
 
-    nameEl.textContent = file.name;
-    imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
-
-    imgEl.onload = () => {
-      const aspect = imgEl.naturalWidth / imgEl.naturalHeight;
+      const aspect = probe.naturalWidth / probe.naturalHeight;
       const dispH  = Math.min(H * ZOOM, area.clientHeight - 32);
       const dispW  = Math.round(dispH * aspect);
+
+      // Set explicit pixel dimensions so no CSS percentage resolution is needed.
       wrap.style.width  = dispW + 'px';
       wrap.style.height = dispH + 'px';
+      imgEl.style.width  = dispW + 'px';
+      imgEl.style.height = dispH + 'px';
+      imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
+      imgEl.src = dataURL;
+
+      nameEl.textContent = file.name;
       refOffsetX = 0;
       refOffsetY = 0;
       floatEl.style.display = 'block';
       repositionRef();
     };
-
-    imgEl.src = ev.target.result;
+    probe.src = dataURL;
   };
   reader.readAsDataURL(file);
-  e.target.value = '';
 }
 
 function setRefOpacity(v) {
