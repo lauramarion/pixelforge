@@ -35,6 +35,9 @@ let selectedPaletteIdx = -1;
 // Active color picker target ('fg' | 'bg')
 let pickerTarget = 'fg';
 
+// Layer drag-and-drop
+let dragSrcIdx = null;
+
 // Reference image position (offset from canvas-wrap top-left, in screen px)
 let refOffsetX = 0, refOffsetY = 0;
 
@@ -136,7 +139,40 @@ function renderLayersList() {
     const i = layers.length - 1 - ri;
     const div = document.createElement('div');
     div.className = 'layer-item' + (i === activeLayerIdx ? ' active' : '');
+    div.draggable = true;
     div.onclick = () => { activeLayerIdx = i; renderLayersList(); };
+
+    // ── Drag-and-drop reorder ──
+    div.addEventListener('dragstart', e => {
+      dragSrcIdx = i;
+      e.dataTransfer.effectAllowed = 'move';
+      // Defer so the dragging style applies after the drag image is captured
+      requestAnimationFrame(() => div.classList.add('dragging'));
+    });
+    div.addEventListener('dragend', () => {
+      dragSrcIdx = null;
+      document.querySelectorAll('.layer-item').forEach(d => {
+        d.classList.remove('dragging', 'drag-over');
+      });
+    });
+    div.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.layer-item').forEach(d => d.classList.remove('drag-over'));
+      if (dragSrcIdx !== i) div.classList.add('drag-over');
+    });
+    div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+    div.addEventListener('drop', e => {
+      e.preventDefault();
+      div.classList.remove('drag-over');
+      if (dragSrcIdx === null || dragSrcIdx === i) return;
+      saveUndo();
+      const activeLayer = layers[activeLayerIdx]; // track by reference
+      const [moved] = layers.splice(dragSrcIdx, 1);
+      layers.splice(i, 0, moved);
+      activeLayerIdx = layers.indexOf(activeLayer);
+      renderLayersList(); renderAll();
+    });
 
     const thumb = document.createElement('div');
     thumb.className = 'layer-thumb';
@@ -266,7 +302,17 @@ function getPixelPos(e) {
 }
 
 mainCanvas.addEventListener('mousedown', e => {
-  if (e.button === 2) { openCtxMenu(e); return; }
+  if (e.button === 2) {
+    // Right-click on pencil = erase; everywhere else = context menu
+    if (currentTool === 'pencil') {
+      const pos = getPixelPos(e);
+      isDrawing = true;
+      handleToolStart(pos.x, pos.y, e);
+    } else {
+      openCtxMenu(e);
+    }
+    return;
+  }
   const pos = getPixelPos(e);
   isDrawing = true;
   handleToolStart(pos.x, pos.y, e);
@@ -366,7 +412,7 @@ function handleToolMove(x, y, e) {
   }
 }
 
-function handleToolEnd(x, y, e) {
+function handleToolEnd(x, y) {
   const layer = layers[activeLayerIdx];
   if (!layer) return;
 
@@ -413,7 +459,8 @@ function drawPixel(ctx, x, y, e) {
   const s = brushSize;
   const ox = x - Math.floor(s / 2);
   const oy = y - Math.floor(s / 2);
-  if (currentTool === 'eraser' || (e && e.button === 2)) {
+  const isRightClick = e && (e.button === 2 || (e.buttons & 2));
+  if (currentTool === 'eraser' || isRightClick) {
     ctx.clearRect(ox, oy, s, s);
   } else {
     ctx.globalAlpha = brushOpacity;

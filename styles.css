@@ -352,7 +352,9 @@ header {
   border-radius: 5px; padding: 6px 8px; cursor: pointer;
   transition: border-color 0.15s;
 }
-.layer-item.active { border-color: var(--accent); }
+.layer-item.active    { border-color: var(--accent); }
+.layer-item.dragging  { opacity: 0.35; }
+.layer-item.drag-over { border-color: var(--accent3); box-shadow: 0 0 0 1px var(--accent3); }
 .layer-thumb {
   width: 24px; height: 24px; border-radius: 3px;
   background: repeating-conic-gradient(#2a2a38 0% 25%, #222230 0% 50%) 0 0 / 8px 8px;
