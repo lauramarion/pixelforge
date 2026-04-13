@@ -38,14 +38,17 @@ let pickerTarget = 'fg';
 // Layer drag-and-drop
 let dragSrcIdx = null;
 
-// Reference image position (offset from canvas-wrap top-left, in screen px)
+// Reference image position & size in canvas-pixel coordinates
+// (i.e. relative to the pixel-art grid, so they scale with ZOOM)
 let refOffsetX = 0, refOffsetY = 0;
+let refWidthPx = 0, refHeightPx = 0;  // width/height in canvas pixels
+let refAspect = 1;  // natural aspect ratio (w/h) for locked resizing
 
 // DOM references
-const mainCanvas   = document.getElementById('main-canvas');
+const mainCanvas = document.getElementById('main-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
-const mainCtx      = mainCanvas.getContext('2d');
-const overlayCtx   = overlayCanvas.getContext('2d');
+const mainCtx = mainCanvas.getContext('2d');
+const overlayCtx = overlayCanvas.getContext('2d');
 
 // ═══════════════════════════════════════════════════
 //  INIT
@@ -275,8 +278,8 @@ function updateZoom() {
   repositionRef();
 }
 
-function zoomIn()  { ZOOM = Math.min(ZOOM >= 1 ? ZOOM + (ZOOM >= 8 ? 4 : 1) : ZOOM * 2, 64); updateZoom(); drawOverlay(); }
-function zoomOut() { ZOOM = Math.max(ZOOM > 8 ? ZOOM - 4 : ZOOM > 1 ? ZOOM - 1 : ZOOM, 1);  updateZoom(); drawOverlay(); }
+function zoomIn() { ZOOM = Math.min(ZOOM >= 1 ? ZOOM + (ZOOM >= 8 ? 4 : 1) : ZOOM * 2, 64); updateZoom(); drawOverlay(); }
+function zoomOut() { ZOOM = Math.max(ZOOM > 8 ? ZOOM - 4 : ZOOM > 1 ? ZOOM - 1 : ZOOM, 1); updateZoom(); drawOverlay(); }
 function zoomFit() {
   const area = document.getElementById('canvas-area');
   const zx = Math.floor((area.clientWidth - 40) / W);
@@ -442,9 +445,9 @@ function updateBrushCursor(x, y) {
   const half = Math.floor(brushSize / 2);
   const size = brushSize * ZOOM;
   cur.style.display = 'block';
-  cur.style.left   = ((x - half) * ZOOM) + 'px';
-  cur.style.top    = ((y - half) * ZOOM) + 'px';
-  cur.style.width  = size + 'px';
+  cur.style.left = ((x - half) * ZOOM) + 'px';
+  cur.style.top = ((y - half) * ZOOM) + 'px';
+  cur.style.width = size + 'px';
   cur.style.height = size + 'px';
 }
 
@@ -480,7 +483,7 @@ function drawLine(ctx, x0, y0, x1, y1, e) {
     if (x0 === x1 && y0 === y1) break;
     const e2 = 2 * err;
     if (e2 > -dy) { err -= dy; x0 += sx; }
-    if (e2 < dx)  { err += dx; y0 += sy; }
+    if (e2 < dx) { err += dx; y0 += sy; }
   }
 }
 
@@ -551,7 +554,7 @@ function floodFill(ctx, sx, sy, fillColor) {
 
 function colorsMatch(a, b, tol = 2) {
   return Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol &&
-         Math.abs(a[2] - b[2]) <= tol && Math.abs(a[3] - b[3]) <= tol;
+    Math.abs(a[2] - b[2]) <= tol && Math.abs(a[3] - b[3]) <= tol;
 }
 
 function hexToRGBA(hex) {
@@ -661,23 +664,23 @@ function removeSelectedPaletteColor() {
 function clearPalette() { palette = []; selectedPaletteIdx = -1; renderPalette(); }
 
 const PRESETS = {
-  garden_project: ['#eaf8f6','#d0f0ec','#30c8b0','#1a9e8a','#e8e0f8','#58e890','#e840a0','#f0d030','#3828a8','#080818'],
-  gameboy:        ['#0f380f','#306230','#8bac0f','#9bbc0f'],
-  nes:            ['#000000','#fcfcfc','#f8f8f8','#bcbcbc','#7c7c7c','#a4e4fc','#3cbcfc','#0078f8',
-                   '#0000fc','#b8b8f8','#6888fc','#0058f8','#0044fc','#f8b8f8','#c848c8','#8800a8'],
-  pico8:          ['#000000','#1d2b53','#7e2553','#008751','#ab5236','#5f574f','#c2c3c7','#fff1e8',
-                   '#ff004d','#ffa300','#ffec27','#00e436','#29adff','#83769c','#ff77a8','#ffccaa'],
-  endesga32:      ['#be4a2f','#d77643','#ead4aa','#e4a672','#b86f50','#733e39','#3e2731',
-                   '#a22633','#e43b44','#f77622','#feae34','#fee761','#63c74d','#3e8948',
-                   '#265c42','#193c3e','#124e89','#0099db','#2ce8f5','#ffffff','#c0cbdc',
-                   '#8b9bb4','#5a6988','#3a4466','#262b44','#181425','#ff0044','#68386c',
-                   '#b55088','#f6757a','#e8b796','#c28569'],
-  apollo:         ['#172038','#253a5e','#3c5e8b','#4f8fba','#73bed3','#a4dddb','#19332d','#25562e',
-                   '#468232','#75a743','#a8ca58','#d0da91','#4d2b32','#7a4841','#ad7757','#c09473',
-                   '#d7b594','#e7d5b3','#341c27','#602c2c','#884b2b','#be772b','#de9e41','#e8c170',
-                   '#241527','#411d31','#752438','#a53030','#cf573c','#da863e','#1e1d39','#402751',
-                   '#7a367b','#a23e8c','#c65197','#df84a5','#090a14','#10141f','#151d28','#202e37',
-                   '#394a50','#577277']
+  garden_project: ['#eaf8f6', '#d0f0ec', '#30c8b0', '#1a9e8a', '#e8e0f8', '#58e890', '#e840a0', '#f0d030', '#3828a8', '#080818'],
+  gameboy: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],
+  nes: ['#000000', '#fcfcfc', '#f8f8f8', '#bcbcbc', '#7c7c7c', '#a4e4fc', '#3cbcfc', '#0078f8',
+    '#0000fc', '#b8b8f8', '#6888fc', '#0058f8', '#0044fc', '#f8b8f8', '#c848c8', '#8800a8'],
+  pico8: ['#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
+    '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa'],
+  endesga32: ['#be4a2f', '#d77643', '#ead4aa', '#e4a672', '#b86f50', '#733e39', '#3e2731',
+    '#a22633', '#e43b44', '#f77622', '#feae34', '#fee761', '#63c74d', '#3e8948',
+    '#265c42', '#193c3e', '#124e89', '#0099db', '#2ce8f5', '#ffffff', '#c0cbdc',
+    '#8b9bb4', '#5a6988', '#3a4466', '#262b44', '#181425', '#ff0044', '#68386c',
+    '#b55088', '#f6757a', '#e8b796', '#c28569'],
+  apollo: ['#172038', '#253a5e', '#3c5e8b', '#4f8fba', '#73bed3', '#a4dddb', '#19332d', '#25562e',
+    '#468232', '#75a743', '#a8ca58', '#d0da91', '#4d2b32', '#7a4841', '#ad7757', '#c09473',
+    '#d7b594', '#e7d5b3', '#341c27', '#602c2c', '#884b2b', '#be772b', '#de9e41', '#e8c170',
+    '#241527', '#411d31', '#752438', '#a53030', '#cf573c', '#da863e', '#1e1d39', '#402751',
+    '#7a367b', '#a23e8c', '#c65197', '#df84a5', '#090a14', '#10141f', '#151d28', '#202e37',
+    '#394a50', '#577277']
 };
 
 function loadPreset(name) {
@@ -843,7 +846,7 @@ function ctxClear() {
 }
 
 function selectAll() { sel = { x: 0, y: 0, w: W, h: H }; drawOverlay(); }
-function deselect()  { sel = null; drawOverlay(); }
+function deselect() { sel = null; drawOverlay(); }
 
 // ═══════════════════════════════════════════════════
 //  STATUS BAR
@@ -865,23 +868,25 @@ function openCtxMenu(e) {
   e.preventDefault();
   const m = document.getElementById('ctx-menu');
   m.style.left = e.clientX + 'px';
-  m.style.top  = e.clientY + 'px';
+  m.style.top = e.clientY + 'px';
   m.classList.add('open');
 }
 document.addEventListener('click', () => document.getElementById('ctx-menu').classList.remove('open'));
 
 // ═══════════════════════════════════════════════════
 //  REFERENCE IMAGE — floating, draggable, resizable
+//  Position & size are stored in canvas-pixel coords
+//  so the reference scales and sticks when zooming.
 // ═══════════════════════════════════════════════════
 (function () {
   let dragMode = null; // 'move' | 'resize'
   let ox = 0, oy = 0, startW = 0, startH = 0, startX = 0, startY = 0;
 
-  // app.js runs at end of <body>, so the DOM is already ready — no DOMContentLoaded needed.
-  const panel        = document.getElementById('ref-float');
-  const bar          = document.getElementById('ref-float-bar');
+  // app.js runs at end of <body>, so the DOM is already ready.
+  const panel = document.getElementById('ref-float');
+  const bar = document.getElementById('ref-float-bar');
   const resizeHandle = document.getElementById('ref-resize');
-  const wrap         = document.getElementById('ref-img-wrap');
+  const wrap = document.getElementById('ref-img-wrap');
 
   bar.addEventListener('mousedown', e => {
     if (e.target.tagName === 'BUTTON') return;
@@ -905,19 +910,29 @@ document.addEventListener('click', () => document.getElementById('ctx-menu').cla
 
   document.addEventListener('mousemove', e => {
     if (!dragMode) return;
-    const area       = document.getElementById('canvas-area').getBoundingClientRect();
+    const area = document.getElementById('canvas-area').getBoundingClientRect();
     const canvasRect = document.getElementById('canvas-wrap').getBoundingClientRect();
     if (dragMode === 'move') {
       const newLeft = e.clientX - area.left - ox;
-      const newTop  = e.clientY - area.top  - oy;
+      const newTop = e.clientY - area.top - oy;
       panel.style.left = newLeft + 'px';
-      panel.style.top  = newTop  + 'px';
-      // Store offset from canvas-wrap so repositionRef can restore it on zoom change
-      refOffsetX = newLeft - (canvasRect.left - area.left);
-      refOffsetY = newTop  - (canvasRect.top  - area.top);
+      panel.style.top = newTop + 'px';
+      // Convert screen offset from canvas-wrap to canvas-pixel coords
+      refOffsetX = (newLeft - (canvasRect.left - area.left)) / ZOOM;
+      refOffsetY = (newTop - (canvasRect.top - area.top)) / ZOOM;
     } else if (dragMode === 'resize') {
-      wrap.style.width  = Math.max(80, startW + (e.clientX - startX)) + 'px';
-      wrap.style.height = Math.max(60, startH + (e.clientY - startY)) + 'px';
+      // Lock aspect ratio: derive height from width
+      const newScreenW = Math.max(80, startW + (e.clientX - startX));
+      const newScreenH = Math.round(newScreenW / refAspect);
+      wrap.style.width = newScreenW + 'px';
+      wrap.style.height = newScreenH + 'px';
+      // Store in canvas-pixel coords
+      refWidthPx = newScreenW / ZOOM;
+      refHeightPx = newScreenH / ZOOM;
+      // Keep the img element matching
+      const imgEl = document.getElementById('ref-img-float');
+      imgEl.style.width = newScreenW + 'px';
+      imgEl.style.height = newScreenH + 'px';
     }
   });
 
@@ -929,10 +944,22 @@ function triggerImportRef() { document.getElementById('import-ref-input').click(
 function repositionRef() {
   const floatEl = document.getElementById('ref-float');
   if (!floatEl || floatEl.style.display === 'none') return;
-  const area       = document.getElementById('canvas-area').getBoundingClientRect();
+  const area = document.getElementById('canvas-area').getBoundingClientRect();
   const canvasRect = document.getElementById('canvas-wrap').getBoundingClientRect();
-  floatEl.style.left = (canvasRect.left - area.left + refOffsetX) + 'px';
-  floatEl.style.top  = (canvasRect.top  - area.top  + refOffsetY) + 'px';
+  // Convert canvas-pixel offset back to screen pixels at the current zoom
+  floatEl.style.left = (canvasRect.left - area.left + refOffsetX * ZOOM) + 'px';
+  floatEl.style.top = (canvasRect.top - area.top + refOffsetY * ZOOM) + 'px';
+  // Scale the image wrap + img to the current zoom
+  if (refWidthPx > 0 && refHeightPx > 0) {
+    const sw = refWidthPx * ZOOM;
+    const sh = refHeightPx * ZOOM;
+    const wrap = document.getElementById('ref-img-wrap');
+    const imgEl = document.getElementById('ref-img-float');
+    wrap.style.width = sw + 'px';
+    wrap.style.height = sh + 'px';
+    imgEl.style.width = sw + 'px';
+    imgEl.style.height = sh + 'px';
+  }
 }
 
 function importRef(e) {
@@ -943,23 +970,28 @@ function importRef(e) {
   reader.onload = (ev) => {
     const dataURL = ev.target.result;
     const floatEl = document.getElementById('ref-float');
-    const imgEl   = document.getElementById('ref-img-float');
-    const nameEl  = document.getElementById('ref-float-name');
-    const wrap    = document.getElementById('ref-img-wrap');
-    const area    = document.getElementById('canvas-area');
+    const imgEl = document.getElementById('ref-img-float');
+    const nameEl = document.getElementById('ref-float-name');
+    const wrap = document.getElementById('ref-img-wrap');
+    const area = document.getElementById('canvas-area');
 
     nameEl.textContent = file.name;
     imgEl.style.opacity = document.getElementById('ref-opacity').value / 100;
 
     // onload must be assigned before src so it is guaranteed to catch the event.
     imgEl.onload = () => {
-      const aspect = imgEl.naturalWidth / imgEl.naturalHeight;
-      const dispH  = Math.min(H * ZOOM, area.clientHeight - 32);
-      const dispW  = Math.round(dispH * aspect);
-      // Explicit pixel sizes — avoids CSS percentage-height resolution issues.
-      wrap.style.width   = dispW + 'px';
-      wrap.style.height  = dispH + 'px';
-      imgEl.style.width  = dispW + 'px';
+      refAspect = imgEl.naturalWidth / imgEl.naturalHeight;
+      // Size in canvas-pixel coords (so it scales with zoom)
+      const hPx = Math.min(H, (area.clientHeight - 32) / ZOOM);
+      const wPx = hPx * refAspect;
+      refWidthPx = wPx;
+      refHeightPx = hPx;
+      // Convert to screen pixels for initial display
+      const dispW = Math.round(wPx * ZOOM);
+      const dispH = Math.round(hPx * ZOOM);
+      wrap.style.width = dispW + 'px';
+      wrap.style.height = dispH + 'px';
+      imgEl.style.width = dispW + 'px';
       imgEl.style.height = dispH + 'px';
       refOffsetX = 0;
       refOffsetY = 0;
@@ -1182,13 +1214,13 @@ function loadProject(e) {
 // ═══════════════════════════════════════════════════
 //  MODALS
 // ═══════════════════════════════════════════════════
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function openNewModal() { openModal('modal-new'); }
 
 function createNewCanvas() {
-  const w  = parseInt(document.getElementById('new-w').value)  || 32;
-  const h  = parseInt(document.getElementById('new-h').value)  || 32;
+  const w = parseInt(document.getElementById('new-w').value) || 32;
+  const h = parseInt(document.getElementById('new-h').value) || 32;
   const bg = document.getElementById('new-bg').value;
   createNewCanvasData(w, h, bg);
   zoomFit();
@@ -1215,18 +1247,18 @@ document.addEventListener('keydown', e => {
     return;
   }
   switch (e.key.toLowerCase()) {
-    case 'p': setTool('pencil');    break;
-    case 'e': setTool('eraser');    break;
-    case 'f': setTool('fill');      break;
+    case 'p': setTool('pencil'); break;
+    case 'e': setTool('eraser'); break;
+    case 'f': setTool('fill'); break;
     case 'i': setTool('eyedropper'); break;
-    case 'l': setTool('line');      break;
-    case 'r': setTool('rect');      break;
-    case 'o': setTool('ellipse');   break;
-    case 's': setTool('select');    break;
-    case 'v': setTool('move');      break;
+    case 'l': setTool('line'); break;
+    case 'r': setTool('rect'); break;
+    case 'o': setTool('ellipse'); break;
+    case 's': setTool('select'); break;
+    case 'v': setTool('move'); break;
     case 'g': showGrid = !showGrid; drawOverlay(); break;
-    case '+': case '=': zoomIn();  break;
-    case '-':           zoomOut(); break;
+    case '+': case '=': zoomIn(); break;
+    case '-': zoomOut(); break;
     case 'escape': deselect(); break;
     case '[':
       brushSize = Math.max(1, brushSize - 1);
